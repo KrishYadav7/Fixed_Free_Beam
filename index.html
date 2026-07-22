@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantilever Beam Vibration: FEM vs Analytical</title>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>Transverse Vibration: Cantilever (Fixed-Free) Beam</h1>
+    <p>Compare the Analytical (Euler-Bernoulli) solution and Finite Element Method (FEM) frequencies for a beam fixed at one end and completely free at the other.</p>
+
+    <div class="button-group">
+        <button id="showSolutionBtn" class="btn-secondary">View Analytical Solution</button>
+        <button id="showFemSolutionBtn" class="btn-secondary">View FEM Solution</button>
+    </div>
+    
+    <hr style="margin: 20px 0; border: 1px solid #eee;">
+
+    <div class="input-grid">
+        <div class="input-group">
+            <label>Length of Beam (L) [m]:</label>
+            <input type="number" id="L" value="1.0" step="0.1">
+        </div>
+        <div class="input-group">
+            <label>Young's Modulus (E) [Pa]:</label>
+            <input type="number" id="E" value="200e9" step="1e9">
+        </div>
+        <div class="input-group">
+            <label>Moment of Inertia (I) [m⁴]:</label>
+            <input type="number" id="I" value="1e-6" step="1e-7">
+        </div>
+        <div class="input-group">
+            <label>Density (ρ) [kg/m³]:</label>
+            <input type="number" id="rho" value="7850" step="10">
+        </div>
+        <div class="input-group">
+            <label>Cross-Section Area (A) [m²]:</label>
+            <input type="number" id="A" value="2e-3" step="1e-4">
+        </div>
+        <div class="input-group">
+            <label>Number of Elements (N):</label>
+            <input type="number" id="N" value="10" min="2" max="30">
+        </div>
+    </div>
+    <button id="calculateBtn">Calculate Frequencies</button>
+
+    <div class="chart-container">
+        <canvas id="freqChart"></canvas>
+    </div>
+
+    <hr style="margin: 40px 0; border: 1px solid #eee;">
+
+    <h2>Mode Shape Visualization</h2>
+    <div class="input-grid">
+        <div class="input-group">
+            <label>Select Mode Number (n) to Plot:</label>
+            <input type="number" id="modeSelect" value="1" min="1" max="10">
+        </div>
+    </div>
+    <div class="button-group">
+        <button id="plotModeBtn">Plot Mode Shape</button>
+        <button id="animateBtn" class="btn-secondary">Animate Mode Shape</button>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="modeChart"></canvas>
+    </div>
+
+    <h2>Frequency & Error Table (rad/s)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Mode (n)</th>
+                <th>Analytical (Exact)</th>
+                <th>FEM (Consistent Mass)</th>
+                <th>Error (%)</th>
+            </tr>
+        </thead>
+        <tbody id="resultTableBody"></tbody>
+    </table>
+</div>
+
+<div id="solutionModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>Analytical Solution: Cantilever Beam</h2>
+        <p>The governing partial differential equation for the free transverse vibration of a uniform Euler-Bernoulli beam is:</p>
+        <p>$$EI \frac{\partial^4 w}{\partial x^4} + \rho A \frac{\partial^2 w}{\partial t^2} = 0$$</p>
+        
+        <p>Assuming harmonic motion, the spatial wave equation is driven by the parameter \(\beta\):</p>
+        <p>$$\beta^4 = \frac{\rho A \omega^2}{EI}$$</p>
+        
+        <h3>Boundary Conditions (Fixed-Free)</h3>
+        <p>For a cantilever beam:</p>
+        <ol>
+            <li><strong>Fixed End (\(x = 0\)):</strong> Displacement and slope are zero (\(W = 0, W' = 0\)).</li>
+            <li><strong>Free End (\(x = L\)):</strong> Bending moment and shear force are zero (\(W'' = 0, W''' = 0\)).</li>
+        </ol>
+        
+        <p>Applying these yields the transcendental frequency equation:</p>
+        <p>$$\cos(\beta L) \cosh(\beta L) = -1$$</p>
+        
+        <p>The roots \(\beta_n L\) must be solved numerically. The first few are approximately 1.875, 4.694, and 7.855. For higher modes (\(n \ge 3\)), they approximate to \(\frac{(2n-1)\pi}{2}\).</p>
+        
+        <p>The exact natural frequencies are:</p>
+        <p>$$\omega_n = (\beta_n L)^2 \sqrt{\frac{EI}{\rho A L^4}}$$</p>
+        
+        <p>And the corresponding mode shapes are:</p>
+        <p>$$W_n(x) = (\cosh \beta_n x - \cos \beta_n x) - \sigma_n (\sinh \beta_n x - \sin \beta_n x)$$</p>
+        <p>where \(\sigma_n = \frac{\cosh \beta_n L + \cos \beta_n L}{\sinh \beta_n L + \sin \beta_n L}\).</p>
+    </div>
+</div>
+
+<div id="femSolutionModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>FEM Formulation for Cantilever Beam</h2>
+        <p>A beam element uses cubic Hermite shape functions with two degrees of freedom per node: lateral displacement (\(w\)) and slope (\(\theta\)). The local element matrices are identical to the simply supported beam.</p>
+        
+        <h3>Applying Fixed-Free Boundary Conditions</h3>
+        <p>At the fixed wall (Node 0), both degrees of freedom are fully constrained:</p>
+        <p>$$w_0 = 0 \quad \text{and} \quad \theta_0 = 0$$</p>
+        <p>All subsequent nodes (Node 1 through Node \(N\)), including the free end, are completely unrestrained. This leaves \(2N\) active degrees of freedom in the global assembled matrices.</p>
+        
+        <h3>Solving the System</h3>
+        <p>The natural frequencies are found by solving the generalized eigenvalue problem:</p>
+        <p>$$(\mathbf{K}_{\text{active}} - \omega^2\mathbf{M}_{\text{active}})\mathbf{U}_{\text{active}} = 0$$</p>
+        <p>The system is transformed to a standard symmetric eigenvalue problem using a Cholesky decomposition of the mass matrix, and solved via the Jacobi method.</p>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
